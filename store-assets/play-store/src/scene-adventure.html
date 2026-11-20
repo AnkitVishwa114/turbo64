@@ -1,0 +1,110 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head><body>
+<script type="module">
+// An original low-poly 3D platformer scene in the style of late-90s console games (no real game assets).
+import * as THREE from 'three';
+const W = 1280, H = 960;
+const renderer = new THREE.WebGLRenderer({antialias: true, preserveDrawingBuffer: true});
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xA8D8F0, 38, 120);
+// Sky: vertical gradient on a big sphere.
+const skyMat = new THREE.ShaderMaterial({side: THREE.BackSide, depthWrite: false, uniforms: {},
+  vertexShader: 'varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: 'varying vec3 p; void main(){ float t = clamp(normalize(p).y*1.6+0.15,0.0,1.0); gl_FragColor = vec4(mix(vec3(0.70,0.88,0.97), vec3(0.20,0.50,0.92), t),1.0); }'});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(400, 24, 12), skyMat));
+
+const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 500);
+camera.position.set(0, 6.2, 15.5); camera.lookAt(0, 2.4, 0);
+scene.add(new THREE.HemisphereLight(0xEAF6FF, 0x4F7A3A, 1.25));
+const sun = new THREE.DirectionalLight(0xFFF2D6, 1.6); sun.position.set(-20, 30, 18); scene.add(sun);
+
+const flat = (c) => new THREE.MeshLambertMaterial({color: c, flatShading: true});
+// Seeded random so every render is the same.
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// Rolling grass terrain with a few colour patches.
+const ground = new THREE.PlaneGeometry(200, 200, 60, 60); ground.rotateX(-Math.PI / 2);
+const pos = ground.attributes.position, colors = [];
+for (let i = 0; i < pos.count; i++) {
+  const x = pos.getX(i), z = pos.getZ(i);
+  const d = Math.hypot(x, z + 4);
+  let y = Math.sin(x * 0.11) * 1.4 + Math.cos(z * 0.09) * 1.6 + (rnd() - 0.5) * 0.5;
+  y *= Math.min(1, Math.max(0, (d - 9) / 14));          // flat play area in the middle
+  if (z < -40) y += (-40 - z) * 0.35;                   // hills far away
+  pos.setY(i, y);
+  const g = 0.45 + rnd() * 0.12;
+  colors.push(0.30 + rnd() * 0.05, g + 0.12, 0.18);
+}
+ground.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+ground.computeVertexNormals();
+scene.add(new THREE.Mesh(ground, new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true})));
+
+// Dirt path towards the castle.
+const path = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 60, 1, 1), flat(0xC9A46A));
+path.rotation.x = -Math.PI / 2; path.position.set(0, 0.04, -9); scene.add(path);
+
+// Castle: walls, towers, roofs, a gate and a moat bridge.
+const castle = new THREE.Group(); castle.position.set(0, 0, -44);
+const stone = flat(0xD8D2C4), stoneDark = flat(0xB9B1A0), roof = flat(0xC8463A), wood = flat(0x7A4A28);
+const box = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); castle.add(b); return b; };
+box(26, 8, 2.4, stone, 0, 4, 0);
+box(14, 15, 9, stone, 0, 7.5, -7);
+for (let i = -6; i <= 6; i++) box(1.1, 1.3, 2.5, stoneDark, i * 2.05, 8.6, 0);
+for (const [x, h] of [[-13, 12], [13, 12], [-6.5, 19], [6.5, 19]]) {
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.5, h, 10), stone); t.position.set(x, h / 2, x * 0.0 + (Math.abs(x) < 10 ? -7 : 0)); castle.add(t);
+  const c = new THREE.Mesh(new THREE.ConeGeometry(3.1, 5.5, 10), roof); c.position.set(x, h + 2.7, t.position.z); castle.add(c);
+}
+const mainRoof = new THREE.Mesh(new THREE.ConeGeometry(6.2, 7, 4), roof); mainRoof.rotation.y = Math.PI / 4; mainRoof.position.set(0, 18.5, -7); castle.add(mainRoof);
+box(4.4, 6, 0.4, wood, 0, 3, 1.3);
+const win = flat(0x2E4B7A); for (const x of [-4, 0, 4]) box(1.4, 2.2, 0.3, win, x, 11, -2.4);
+const flagPole = box(0.2, 5, 0.2, flat(0x555555), 0, 23.5, -7); const flag = box(2.6, 1.5, 0.1, flat(0xF2C230), 1.4, 25.2, -7);
+scene.add(castle);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(40, 5), new THREE.MeshLambertMaterial({color: 0x3D8FD6, transparent: true, opacity: 0.9}));
+water.rotation.x = -Math.PI / 2; water.position.set(0, 0.08, -39.5); scene.add(water);
+const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.4, 5.4), wood); bridge.position.set(0, 0.25, -39.5); scene.add(bridge);
+
+// Trees and rocks.
+function tree(x, z, s) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25 * s, 0.35 * s, 1.6 * s, 6), wood); trunk.position.y = 0.8 * s; g.add(trunk);
+  const tone = [0x2F8A3E, 0x3A9C48, 0x2B7A38][Math.floor(rnd() * 3)];
+  for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.ConeGeometry((1.6 - k * 0.35) * s, 1.9 * s, 7), flat(tone)); c.position.y = (1.9 + k * 1.05) * s; g.add(c); }
+  g.position.set(x, 0, z); scene.add(g);
+}
+for (const [x, z, s] of [[-11, -8, 1.4], [-14, -16, 1.6], [12, -10, 1.5], [15, -20, 1.8], [-18, -26, 1.7], [19, -30, 2], [-8, 4, 1.1], [10, 2, 1.2], [-22, -6, 1.9], [24, -12, 2.1]]) tree(x, z, s);
+for (const [x, z] of [[-5, -2], [6, -6], [-7, -14]]) { const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8, 0), flat(0x9A9A92)); r.position.set(x, 0.4, z); scene.add(r); }
+
+// Floating question-free blocks and golden rings to collect.
+const gold = new THREE.MeshLambertMaterial({color: 0xF7C531, emissive: 0x5A3A00, flatShading: true});
+for (let k = 0; k < 6; k++) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.13, 6, 12), gold); ring.position.set(-3 + k * 1.2, 1.4 + Math.sin(k * 0.9) * 0.6, -6 - k * 1.5); ring.rotation.y = 0.6 + k * 0.4; scene.add(ring); }
+
+// Hero: a chunky low-poly explorer (original design: white helmet, orange jacket, teal trousers).
+const hero = new THREE.Group();
+const part = (geo, c, x, y, z) => { const m = new THREE.Mesh(geo, flat(c)); m.position.set(x, y, z); hero.add(m); return m; };
+part(new THREE.BoxGeometry(1.1, 0.9, 0.7), 0x2A9D9F, 0, 1.0, 0);          // trousers
+part(new THREE.BoxGeometry(1.25, 1.1, 0.85), 0xF07C2A, 0, 1.95, 0);        // jacket
+part(new THREE.SphereGeometry(0.62, 8, 6), 0xF5C9A3, 0, 2.95, 0.05);       // head
+part(new THREE.SphereGeometry(0.68, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0xF4F4F4, 0, 3.05, 0); // helmet
+part(new THREE.BoxGeometry(0.9, 0.18, 0.5), 0x2E3B4E, 0, 3.0, 0.5);         // visor
+const arm = (x, r) => { const a = part(new THREE.BoxGeometry(0.34, 1.0, 0.34), 0xF07C2A, x, 1.95, 0); a.rotation.z = r; };
+arm(-0.85, 0.5); arm(0.85, -0.9);
+const leg = (x, r) => { const l = part(new THREE.BoxGeometry(0.42, 0.9, 0.42), 0x2A9D9F, x, 0.45, 0); l.rotation.x = r; };
+leg(-0.3, 0.45); leg(0.3, -0.45);
+part(new THREE.BoxGeometry(0.5, 0.3, 0.7), 0x5B3A22, -0.3, 0.12, 0.25); part(new THREE.BoxGeometry(0.5, 0.3, 0.7), 0x5B3A22, 0.3, 0.12, -0.2);
+hero.position.set(-0.6, 0.6, 2.2); hero.rotation.y = -0.55; scene.add(hero);
+const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.9, 12), new THREE.MeshBasicMaterial({color: 0x000000, transparent: true, opacity: 0.25}));
+shadow.rotation.x = -Math.PI / 2; shadow.position.set(-0.6, 0.06, 2.2); scene.add(shadow);
+
+const view = location.hash.slice(1);
+if (view === 'castle') { camera.position.set(9, 9, -18); camera.lookAt(0, 8, -44); }
+if (view === 'hero') { camera.position.set(3.2, 3.4, 7.5); camera.lookAt(-0.6, 2.2, 2.2); }
+if (view === 'dusk') { scene.fog.color.set(0xF2A07A); skyMat.fragmentShader = skyMat.fragmentShader.replace('vec3(0.70,0.88,0.97), vec3(0.20,0.50,0.92)', 'vec3(0.98,0.62,0.45), vec3(0.28,0.22,0.55)'); skyMat.needsUpdate = true; sun.color.set(0xFFB070); camera.position.set(-10, 7, 10); camera.lookAt(0, 3, -12); }
+renderer.render(scene, camera);
+document.title = 'done';
+</script>
+</body></html>

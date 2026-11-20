@@ -1,0 +1,29 @@
+Turbo64 for Android
+Copyright AppKraft Studio. Distributed under GPL-3.0-or-later (see GPL-3.0.txt).
+Complete corresponding source: https://github.com/AnkitVishwa114/turbo64
+
+LibretroDroid 0.13.2
+Copyright Filippo Scognamiglio and contributors. GPL-3.0-or-later.
+https://github.com/Swordfish90/LibretroDroid/tree/0.13.2
+
+Mupen64Plus-Next (libretro core, GLES3 build)
+Copyright the Mupen64Plus team, the libretro team and contributors. GPL-2.0-or-later.
+https://github.com/libretro/mupen64plus-libretro-nx
+Includes GLideN64 by Sergey Lipskiy and contributors (GPL-2.0-or-later) and the Mupen64Plus core (GPL-2.0-or-later).
+The unmodified core binary is taken from https://buildbot.libretro.com (nightly of 15 November 2026).
+
+No console BIOS, firmware or game is included with this app.
+"Nintendo 64" is a trademark of Nintendo. Turbo64 is not affiliated with or endorsed by Nintendo.
+
+AndroidX and Material components: Apache-2.0.
+Kotlin and kotlinx.coroutines: Apache-2.0.
+Apache Commons Compress: Apache-2.0.
+XZ for Java: 0BSD.
+Google Mobile Ads SDK, User Messaging Platform and Play Core libraries: Google terms.
+Outfit font: SIL Open Font License 1.1 (Outfit-OFL.txt).
+
+Game names (assets/n64names.tsv)
+The list of game names by header checksum is taken from the ROM catalogue of
+Mupen64Plus (mupen64plus.ini, https://github.com/mupen64plus/mupen64plus-core),
+licensed under the GNU General Public License v2.0. Only names are included; no
+game data.

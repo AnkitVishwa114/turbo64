@@ -1,0 +1,111 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head><body>
+<script type="module">
+// An original low-poly kart racing scene (no real game assets).
+import * as THREE from 'three';
+const W = 1280, H = 960;
+const renderer = new THREE.WebGLRenderer({antialias: true, preserveDrawingBuffer: true});
+renderer.setPixelRatio(1); renderer.setSize(W, H); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xF6D7A8, 45, 150);
+const skyMat = new THREE.ShaderMaterial({side: THREE.BackSide, depthWrite: false,
+  vertexShader: 'varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader: 'varying vec3 p; void main(){ float t = clamp(normalize(p).y*1.8+0.05,0.0,1.0); gl_FragColor = vec4(mix(vec3(0.99,0.80,0.55), vec3(0.32,0.55,0.93), t),1.0); }'});
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(400, 24, 12), skyMat));
+const camera = new THREE.PerspectiveCamera(58, W / H, 0.1, 500);
+camera.position.set(-1.2, 3.4, 8.2); camera.lookAt(0.6, 1.3, -4);
+scene.add(new THREE.HemisphereLight(0xFFF3E0, 0x6A5A3A, 1.2));
+const sun = new THREE.DirectionalLight(0xFFE2B8, 1.7); sun.position.set(25, 18, 10); scene.add(sun);
+const flat = (c) => new THREE.MeshLambertMaterial({color: c, flatShading: true});
+let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// Track: a curving ribbon with kerbs, built from the curve's points.
+const curve = new THREE.CatmullRomCurve3([[0,0,12],[0,0,0],[1,0,-14],[6,0,-28],[16,0,-38],[30,0,-42],[44,0,-38]].map(p => new THREE.Vector3(...p)));
+function ribbon(width, offset, color, y) {
+  const pts = curve.getSpacedPoints(160), v = [], idx = [];
+  pts.forEach((p, i) => {
+    const t = curve.getTangentAt(i / 160), n = new THREE.Vector3(-t.z, 0, t.x).normalize();
+    const a = p.clone().addScaledVector(n, offset - width / 2), b = p.clone().addScaledVector(n, offset + width / 2);
+    v.push(a.x, y, a.z, b.x, y, b.z);
+    if (i > 0) { const k = i * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.setIndex(idx); g.computeVertexNormals();
+  const m = typeof color === 'number' ? flat(color) : color; m.side = THREE.DoubleSide;
+  return new THREE.Mesh(g, m);
+}
+scene.add(ribbon(9, 0, 0x6E6A70, 0.05));
+// Kerbs: red and white blocks along both edges.
+const pts = curve.getSpacedPoints(80);
+pts.forEach((p, i) => {
+  const t = curve.getTangentAt(i / 80), n = new THREE.Vector3(-t.z, 0, t.x).normalize();
+  for (const side of [-1, 1]) {
+    const k = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 1.0), flat(i % 2 ? 0xE8463C : 0xF4F4F4));
+    k.position.copy(p).addScaledVector(n, side * 4.9); k.position.y = 0.1; k.lookAt(k.position.clone().add(t)); scene.add(k);
+  }
+});
+// Start line: checkerboard across the track.
+for (let i = 0; i < 9; i++) for (let j = 0; j < 2; j++) {
+  const c = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.6), flat((i + j) % 2 ? 0x111111 : 0xFFFFFF));
+  c.rotation.x = -Math.PI / 2; c.position.set(-4 + i, 0.07, 3.2 + j * 0.6); scene.add(c);
+}
+// Desert ground with dunes and mesas.
+const ground = new THREE.PlaneGeometry(260, 260, 50, 50); ground.rotateX(-Math.PI / 2);
+const gp = ground.attributes.position, gc = [];
+for (let i = 0; i < gp.count; i++) {
+  const x = gp.getX(i), z = gp.getZ(i);
+  gp.setY(i, (Math.sin(x * 0.08) + Math.cos(z * 0.07)) * 0.5 - 1.2);
+  const s = 0.86 + rnd() * 0.06; gc.push(s, s * 0.74, s * 0.48);
+}
+ground.setAttribute('color', new THREE.Float32BufferAttribute(gc, 3)); ground.computeVertexNormals();
+scene.add(new THREE.Mesh(ground, new THREE.MeshLambertMaterial({vertexColors: true, flatShading: true})));
+for (const [x, z, w, h] of [[-40, -70, 26, 18], [30, -95, 34, 24], [-75, -40, 22, 14], [70, -60, 20, 30]]) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.42, w * 0.5, h, 7), flat(0xC0663A)); m.position.set(x, h / 2, z); scene.add(m);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.44, w * 0.42, 1.2, 7), flat(0xD98A52)); top.position.set(x, h, z); scene.add(top);
+}
+// Cacti and a banner over the track.
+function cactus(x, z, s) {
+  const g = new THREE.Group(), m = flat(0x3E8C4A);
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(0.35 * s, 0.4 * s, 3 * s, 7), m); t.position.y = 1.5 * s; g.add(t);
+  const a = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.22 * s, 1.2 * s, 6), m); a.position.set(0.6 * s, 1.9 * s, 0); g.add(a);
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.22 * s, 1.0 * s, 6), m); b.position.set(-0.6 * s, 1.5 * s, 0); g.add(b);
+  g.position.set(x, 0, z); scene.add(g);
+}
+for (const [x, z, s] of [[-8, -6, 1], [9, -10, 1.2], [-10, -22, 1.3], [18, -24, 1.1], [-6, 6, 0.9], [26, -52, 1.4]]) cactus(x, z, s);
+const banner = new THREE.Group();
+for (const x of [-5.6, 5.6]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7, 0.5), flat(0x2C3440)); p.position.set(x, 3.5, 0); banner.add(p); }
+const board = new THREE.Mesh(new THREE.BoxGeometry(11.7, 1.6, 0.4), flat(0x2CC98A)); board.position.y = 6.4; banner.add(board);
+banner.position.set(0.4, 0, -8); scene.add(banner);
+
+// Karts: chassis, seat, wheels and a driver with a helmet.
+function kart(color, helmet, x, z, rot) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.45, 2.8), flat(color)); body.position.y = 0.55; g.add(body);
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.35, 0.8), flat(color)); nose.position.set(0, 0.5, -1.6); g.add(nose);
+  const spoiler = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.12, 0.5), flat(0x222222)); spoiler.position.set(0, 1.1, 1.45); g.add(spoiler);
+  for (const sx of [-0.95, 0.95]) for (const sz of [-0.95, 0.95]) {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.42, 10), flat(0x1A1A1A)); w.rotation.z = Math.PI / 2; w.position.set(sx, 0.42, sz); g.add(w);
+  }
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.8, 0.6), flat(0x31404A)); torso.position.set(0, 1.15, 0.35); g.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 9, 7), flat(helmet)); head.position.set(0, 1.85, 0.35); g.add(head);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.22, 0.2), flat(0x1C2430)); visor.position.set(0, 1.88, -0.05); g.add(visor);
+  const sh = new THREE.Mesh(new THREE.CircleGeometry(1.7, 12), new THREE.MeshBasicMaterial({color: 0, transparent: true, opacity: 0.22})); sh.rotation.x = -Math.PI / 2; sh.position.y = 0.06; g.add(sh);
+  g.position.set(x, 0, z); g.rotation.y = rot; scene.add(g);
+}
+kart(0x3D7BFF, 0xF8C43A, 0.2, 1.8, 0.03);     // player
+kart(0xF04A5A, 0xF4F4F4, 2.6, -9.5, -0.12);   // rival ahead
+kart(0x2CC98A, 0xF04A5A, -1.8, -17, -0.2);    // leader
+// Item boxes floating over the track.
+for (const [x, z] of [[-2.4, -4], [0, -4.4], [2.4, -4.8]]) {
+  const b = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), new THREE.MeshLambertMaterial({color: 0xFFD54A, emissive: 0x6A4A00, transparent: true, opacity: 0.85}));
+  b.position.set(x, 1.1, z); b.rotation.set(0.6, 0.7, 0); scene.add(b);
+}
+const view = location.hash.slice(1);
+if (view === 'side') { camera.position.set(7.5, 2.4, -2); camera.lookAt(0.5, 1, -6); }
+if (view === 'high') { camera.position.set(-14, 22, 8); camera.lookAt(6, 0, -18); }
+renderer.render(scene, camera);
+document.title = 'done';
+</script>
+</body></html>
